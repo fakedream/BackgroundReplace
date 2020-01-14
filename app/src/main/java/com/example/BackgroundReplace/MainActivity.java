@@ -1,6 +1,7 @@
 package com.example.BackgroundReplace;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
@@ -15,10 +16,10 @@ import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
 import android.view.Window;
-import android.widget.ImageView;
 import android.widget.Toast;
 
 import com.bumptech.glide.Glide;
+import com.github.chrisbanes.photoview.PhotoView;
 import com.huawei.hiai.vision.common.ConnectionCallback;
 import com.huawei.hiai.vision.common.VisionBase;
 import com.huawei.hiai.vision.image.segmentation.ImageSegmentation;
@@ -37,22 +38,20 @@ import org.opencv.android.Utils;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.Scalar;
+import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.util.List;
 
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MyTag";
-    private ImageView mPic;
     private Bitmap mBitmap, newbmp, Background, output;
     private String filePath;
     private static final int MSG_SEGMENTATION_FINISH = 1;
     private static final int MSG_REPLACEMENT_FINISH = 2;
+    private PhotoView photoView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,7 +59,7 @@ public class MainActivity extends AppCompatActivity {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         setContentView(R.layout.activity_main);
         checkPermission();
-        mPic = findViewById(R.id.iv_pic);
+        photoView = findViewById(R.id.photo_view);
     }
 
     /**
@@ -129,6 +128,7 @@ public class MainActivity extends AppCompatActivity {
     /**
      * Handler线程间通信
      */
+    @SuppressLint("HandlerLeak")
     private Handler mHandler = new Handler(){
         @Override
         public  void handleMessage(Message msg){
@@ -136,13 +136,13 @@ public class MainActivity extends AppCompatActivity {
             switch (msg.what){
                 case MSG_SEGMENTATION_FINISH:
                     /**Print Portrait segmented; */
-                    mPic.setImageBitmap(newbmp);
+                    photoView.setImageBitmap(newbmp);
                     Toast.makeText(getApplicationContext(), "人像分割完成", Toast.LENGTH_SHORT).show();
                     output = BackgroundReplace(mBitmap, newbmp, Background);
                     break;
                 case MSG_REPLACEMENT_FINISH:
                     /**Print Background Replaced; */
-                    mPic.setImageBitmap(output);
+                    photoView.setImageBitmap(output);
                     Toast.makeText(getApplicationContext(), "背景替换完成", Toast.LENGTH_SHORT).show();
                     break;
             }
@@ -197,11 +197,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * 分割边缘平滑处理???未做
+     * 服务器网络通信
      */
 
     /**
-     * 背景替换
+     * 分割边缘平滑处理+背景替换
      */
     public Bitmap BackgroundReplace(final Bitmap bmp1, final Bitmap bmp2, Bitmap Background){
         int w = bmp1.getWidth();
@@ -212,36 +212,23 @@ public class MainActivity extends AppCompatActivity {
             public void run() {
                 Mat img1 = new Mat();
                 Mat imgMask = new Mat();
+                Mat mask_blur = new Mat();
+                //Mat mask_dilate = new Mat();
                 Utils.bitmapToMat(bmp1, img1);
                 Utils.bitmapToMat(bmp2, imgMask);
+                /*去模糊+//边缘膨胀*/
+                Size blur_kernel = new Size(100,100);
+                //Mat dilate_kernel = new Mat(5,5,CvType.CV_8U);
+                Imgproc.blur(imgMask,mask_blur,blur_kernel);
+                //Imgproc.dilate(mask_blur,mask_dilate,dilate_kernel);
+
                 Mat imgPortrait = new Mat(img1.size(), CvType.CV_8U, new Scalar((Imgproc.GC_PR_FGD)));
-                img1.copyTo(imgPortrait, imgMask);
+                img1.copyTo(imgPortrait, mask_blur);
                 Utils.matToBitmap(imgPortrait, bmpPortrait);
+                //saveImage(bmpPortrait);
                 mHandler.sendEmptyMessage(MSG_REPLACEMENT_FINISH);
             }
         });
-
-//        Thread pixelReplace = new Thread(new Runnable() {
-//            @Override
-//            public void run() {
-//                for (int i = 0; i < w; i++) {
-//                    for (int j = 0; j < h; j++) {
-//                        switch (bmp2.getPixel(i,j)){
-//                            case Color.BLACK:{
-//                                bmpPortrait.setPixel(i,j, Color.TRANSPARENT);
-//                                break;
-//                            }
-//                            case  Color.WHITE: {
-//                                bmpPortrait.setPixel(i, j, bmp1.getPixel(i, j));
-//                                break;
-//                            }
-//                        }
-//                    }
-//                }
-//                mHandler.sendEmptyMessage(MSG_REPLACEMENT_FINISH);
-//            }
-//        });
-//        pixelReplace.start();
         MaskReplace.start();
         return bmpPortrait;
     }
@@ -264,7 +251,7 @@ public class MainActivity extends AppCompatActivity {
                     if (list != null && list.size() > 0) {
                         //Toast.makeText(getApplicationContext(),"正在处理中..." , Toast.LENGTH_SHORT).show();
                         filePath = list.get(0).getPath();
-                        Glide.with(this).load(filePath).into(mPic);
+                        Glide.with(this).load(filePath).into(photoView);
                         mBitmap = BitmapFactory.decodeFile(filePath);
                         //mPic.setImageBitmap(mBitmap);
                     }
@@ -276,27 +263,6 @@ public class MainActivity extends AppCompatActivity {
     /**
      * 图片存储
      */
-    private String saveImage(Bitmap bmp) {
-        //设置保存图片的文件夹
-        File appDir = new File(Environment.getExternalStorageDirectory(), "processed_img");
-        if (!appDir.exists()) {
-            appDir.mkdir();
-        }
-        //用系统时间来命名图片
-        String fileName = System.currentTimeMillis() + ".png";
-        File outputImage = new File(appDir, fileName);
-        try {
-            FileOutputStream fos = new FileOutputStream(outputImage);
-            bmp.compress(Bitmap.CompressFormat.PNG, 100, fos);
-            fos.flush();
-            fos.close();
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return outputImage.getAbsolutePath();
-    }
 
     /**
      * 权限申请

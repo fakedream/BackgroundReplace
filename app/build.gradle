@@ -27,12 +27,17 @@ dependencies {
     testImplementation 'junit:junit:4.12'
     androidTestImplementation 'com.android.support.test:runner:1.0.2'
     androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+
+    implementation 'com.github.chrisbanes:PhotoView:v2.0.0'
     implementation 'com.github.LuckSiege.PictureSelector:picture_library:v2.2.3'
+    implementation group: 'io.netty', name: 'netty-all', version: '5.0.0.Alpha2'
+
     implementation project(path: ':openCVLibrary330')
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation fileTree(dir: "$buildDir/native-libs", include:
             'native-libs.jar')
     implementation fileTree(dir: 'libs', include: ['*.jar'])
+
 }
 
 repositories {

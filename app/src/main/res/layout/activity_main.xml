@@ -13,8 +13,8 @@
         tools:layout_editor_absoluteX="0dp"
         tools:layout_editor_absoluteY="0dp">
 
-        <ImageView
-            android:id="@+id/iv_pic"
+        <com.github.chrisbanes.photoview.PhotoView
+            android:id="@+id/photo_view"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_weight="1"
